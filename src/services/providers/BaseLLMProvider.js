@@ -80,29 +80,37 @@ class BaseLLMProvider {
   /**
    * 简单文本对话接口
    * @param {string} model - 模型名称
-   * @param {string} userMessage - 用户消息
-   * @param {string} systemMessage - 系统消息（可选）
+   * @param {Array} messages - 消息数组，包含role和content字段
+   * @param {Object} options - 额外的聊天选项（可选）
    * @returns {Promise<Object>} 聊天响应
    */
-  async simpleChat(model, userMessage, systemMessage = null) {
-    const messages = [];
-    
-    if (systemMessage) {
-      messages.push({
-        role: 'system',
-        content: systemMessage
-      });
+  async simpleChat(model, messages, options = {}) {
+    // 验证messages参数
+    if (!Array.isArray(messages) || messages.length === 0) {
+      throw new Error('messages must be a non-empty array');
     }
-    
-    messages.push({
-      role: 'user',
-      content: userMessage
-    });
+
+    // 验证每个消息的格式
+    for (const message of messages) {
+      if (!message.role || !message.content) {
+        throw new Error('Each message must have role and content properties');
+      }
+      if (!['system', 'user', 'assistant'].includes(message.role)) {
+        throw new Error('Message role must be one of: system, user, assistant');
+      }
+      if (message.role === 'assistant') {
+        message.role = 'system';
+      }
+    }
+
+    // 提取流式回调函数
+    const { onData, onEnd, onError, ...chatOptions } = options;
 
     return this.chatCompletion({
       model,
-      messages
-    });
+      messages,
+      ...chatOptions
+    }, onData, onEnd, onError);
   }
 
   /**

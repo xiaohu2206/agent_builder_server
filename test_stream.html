@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>流式聊天测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            white-space: pre-wrap;
+            min-height: 100px;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>流式聊天测试</h1>
+        
+        <div class="input-group">
+            <label for="model">模型:</label>
+            <input type="text" id="model" value="ep-20241230155851-qjqzm" placeholder="输入模型名称">
+        </div>
+        
+        <div class="input-group">
+            <label for="message">用户消息:</label>
+            <textarea id="message" placeholder="输入你的消息">你好，请介绍一下你自己</textarea>
+        </div>
+        
+        <div class="input-group">
+            <label for="systemMessage">系统消息 (可选):</label>
+            <textarea id="systemMessage" placeholder="输入系统消息（可选）">你是一个有用的AI助手</textarea>
+        </div>
+        
+        <div class="input-group">
+            <label for="streamMode">响应模式:</label>
+            <select id="streamMode">
+                <option value="true">流式响应</option>
+                <option value="false">普通响应</option>
+            </select>
+        </div>
+        
+        <button onclick="sendMessage()">发送消息</button>
+        <button onclick="clearResponse()">清空响应</button>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        <div id="response" class="response"></div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+        
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+        
+        function clearResponse() {
+            document.getElementById('response').textContent = '';
+            hideStatus();
+        }
+        
+        async function sendMessage() {
+            const model = document.getElementById('model').value;
+            const message = document.getElementById('message').value;
+            const systemMessage = document.getElementById('systemMessage').value;
+            const stream = document.getElementById('streamMode').value === 'true';
+            
+            if (!model || !message) {
+                showStatus('请填写模型和消息', 'error');
+                return;
+            }
+            
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = '';
+            
+            const requestBody = {
+                model,
+                message,
+                systemMessage: systemMessage || undefined,
+                stream
+            };
+            
+            if (stream) {
+                // 流式请求
+                showStatus('正在发送流式请求...', 'info');
+                
+                try {
+                    const response = await fetch('/api/chat/simple', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    
+                    showStatus('正在接收流式数据...', 'info');
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n');
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = line.slice(6);
+                                if (data === '[DONE]') {
+                                    showStatus('流式响应完成', 'success');
+                                    return;
+                                }
+                                try {
+                                    const parsed = JSON.parse(data);
+                                    if (parsed.error) {
+                                        showStatus(`错误: ${parsed.error}`, 'error');
+                                        return;
+                                    }
+                                    // 显示流式数据
+                                    responseDiv.textContent += JSON.stringify(parsed, null, 2) + '\n\n';
+                                } catch (e) {
+                                    // 忽略解析错误
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    showStatus(`请求失败: ${error.message}`, 'error');
+                }
+            } else {
+                // 普通请求
+                showStatus('正在发送普通请求...', 'info');
+                
+                try {
+                    const response = await fetch('/api/chat/simple', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        responseDiv.textContent = JSON.stringify(result, null, 2);
+                        showStatus('请求成功', 'success');
+                    } else {
+                        responseDiv.textContent = JSON.stringify(result, null, 2);
+                        showStatus(`请求失败: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    showStatus(`请求失败: ${error.message}`, 'error');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

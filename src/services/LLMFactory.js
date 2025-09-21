@@ -175,16 +175,16 @@ class LLMFactory {
   }
 
   /**
-   * 创建统一的简单聊天接口
+   * 简单文本对话接口
    * @param {string} providerName - 提供者名称
    * @param {string} model - 模型名称
-   * @param {string} userMessage - 用户消息
-   * @param {string} systemMessage - 系统消息（可选）
+   * @param {Array} messages - 消息数组，包含role和content字段
+   * @param {Object} options - 额外的聊天选项（可选）
    * @returns {Promise<Object>} 聊天响应
    */
-  async simpleChat(providerName, model, userMessage, systemMessage = null) {
+  async simpleChat(providerName, model, messages, options = {}) {
     const provider = this.createProvider(providerName);
-    return provider.simpleChat(model, userMessage, systemMessage);
+    return provider.simpleChat(model, messages, options);
   }
 }
 

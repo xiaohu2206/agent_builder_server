@@ -56,22 +56,22 @@ class LLMService {
   }
 
   /**
-   * 简单文本对话接口 - 兼容原有接口
+   * 简单文本对话接口
    * @param {string} model - 模型名称
-   * @param {string} userMessage - 用户消息
-   * @param {string} systemMessage - 系统消息（可选）
+   * @param {Array} messages - 消息数组，包含role和content字段
    * @param {string} provider - 提供者名称（可选）
+   * @param {Object} options - 额外的聊天选项（可选）
    * @returns {Promise<Object>} 聊天响应
    */
-  async simpleChat(model, userMessage, systemMessage = null, provider = null) {
+  async simpleChat(model, messages, provider = null, options = {}) {
     const selectedProvider = provider || this.defaultProvider;
     
     try {
-      return await this.factory.simpleChat(selectedProvider, model, userMessage, systemMessage);
+      return await this.factory.simpleChat(selectedProvider, model, messages, options);
     } catch (error) {
       if (selectedProvider !== this.defaultProvider) {
         console.warn(`Provider ${selectedProvider} failed, falling back to ${this.defaultProvider}`);
-        return await this.factory.simpleChat(this.defaultProvider, model, userMessage, systemMessage);
+        return await this.factory.simpleChat(this.defaultProvider, model, messages, options);
       }
       throw error;
     }

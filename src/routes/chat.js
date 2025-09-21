@@ -18,18 +18,49 @@ router.post('/simple', async (req, res) => {
       return res.status(500).json({ error: 'LLM service not available' });
     }
 
-    const { model, message, systemMessage } = req.body;
-
-    if (!model || !message) {
-      return res.status(400).json({ error: 'Model and message are required' });
+    const { model, messages, systemMessage, stream } = req.body;
+    if (!model || !messages || !Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: 'Model and messages array are required' });
     }
 
-    const response = await llmService.simpleChat(model, message, systemMessage);
-    
-    res.json({
-      success: true,
-      data: response
-    });
+    if (stream) {
+      // 流式响应处理
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+
+      try {
+        await llmService.simpleChat(model, messages, null, {
+          stream: true,
+          onData: (data) => {
+            res.write(`data: ${JSON.stringify(data)}\n\n`);
+          },
+          onEnd: () => {
+            res.write('data: [DONE]\n\n');
+            res.end();
+          },
+          onError: (error) => {
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+          }
+        });
+      } catch (error) {
+        res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+        res.end();
+      }
+    } else {
+      // 非流式响应处理
+      const response = await llmService.simpleChat(model, messages, null, {
+        stream: false
+      });
+      
+      res.json({
+        success: true,
+        data: response
+      });
+    }
   } catch (error) {
     console.error('Chat error:', error);
     res.status(500).json({ 

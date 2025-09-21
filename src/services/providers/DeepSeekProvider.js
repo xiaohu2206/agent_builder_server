@@ -89,7 +89,18 @@ class DeepSeekProvider extends BaseLLMProvider {
 
     const systemMessage = `You are an expert ${language} programmer. Generate clean, efficient, and well-documented code.`;
     
-    return this.simpleChat(model, codePrompt, systemMessage);
+    const messages = [
+      {
+        role: 'system',
+        content: systemMessage
+      },
+      {
+        role: 'user',
+        content: codePrompt
+      }
+    ];
+    
+    return this.simpleChat(model, messages);
   }
 
   /**
