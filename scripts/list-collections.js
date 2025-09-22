@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 require('dotenv').config();
+const User = require('../src/models/User');
 
 async function listCollections() {
   const mongoUri = process.env.MONGODB_URI;
@@ -23,6 +24,15 @@ async function listCollections() {
     } else {
       console.log('数据库中的集合列表：');
       collectionNames.forEach(name => console.log(`- ${name}`));
+    }
+
+    console.log('\n--- 查看用户表的所有数据 ---');
+    const users = await User.find({});
+    if (users.length === 0) {
+      console.log('用户表中没有数据。');
+    } else {
+      console.log('用户表中的所有数据：');
+      console.log(JSON.stringify(users, null, 2));
     }
 
   } catch (error) {

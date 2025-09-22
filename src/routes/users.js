@@ -1,6 +1,97 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const User = require('../models/User');
+const { generateToken } = require('../utils/jwt');
+const { authenticateToken } = require('../middleware/auth');
+
+// 用户登录
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // 查找用户
+    const user = await User.findOne({ email: email.toLowerCase() });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // 验证密码
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // 检查用户是否激活
+    if (!user.isActive) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+
+    // 生成JWT token
+    const token = generateToken({ 
+      userId: user._id, 
+      email: user.email,
+      username: user.username 
+    });
+
+    // 返回用户信息和token（不包含密码）
+    const userResponse = user.toObject();
+    delete userResponse.password;
+
+    res.json({
+      success: true,
+      data: {
+        user: userResponse,
+        token,
+        expiresIn: '24h'
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ 
+      error: 'Login failed',
+      details: error.message 
+    });
+  }
+});
+
+// 用户登出
+router.post('/logout', authenticateToken, async (req, res) => {
+  try {
+    // 在实际应用中，你可能想要将token加入黑名单
+    // 这里我们只是返回成功响应
+    res.json({
+      success: true,
+      message: 'Logged out successfully'
+    });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ 
+      error: 'Logout failed',
+      details: error.message 
+    });
+  }
+});
+
+// 获取当前用户信息
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: req.user
+    });
+  } catch (error) {
+    console.error('Get current user error:', error);
+    res.status(500).json({ 
+      error: 'Failed to get user info',
+      details: error.message 
+    });
+  }
+});
 
 // 创建用户
 router.post('/', async (req, res) => {
@@ -20,10 +111,14 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: 'User with this email or username already exists' });
     }
 
+    // 加密密码
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
     const user = new User({
       username,
       email,
-      password, // 注意：在生产环境中应该对密码进行哈希处理
+      password: hashedPassword, // 使用加密后的密码
       apiKey
     });
 

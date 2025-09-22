@@ -9,14 +9,10 @@ const connectDB = async () => {
                      'mongodb://localhost:27017/agent_builder'; // 本地安装方式
 
     const conn = await mongoose.connect(mongoUri, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
       // 添加更多连接选项
       maxPoolSize: 10, // 连接池大小
       serverSelectionTimeoutMS: 5000, // 服务器选择超时
       socketTimeoutMS: 45000, // Socket 超时
-      bufferMaxEntries: 0, // 禁用 mongoose 缓冲
-      bufferCommands: false, // 禁用 mongoose 缓冲
     });
 
     console.log(`MongoDB Connected: ${conn.connection.host}`);
